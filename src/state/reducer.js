@@ -1,7 +1,7 @@
-import { NODE_W, GAP_X, GAP_Y } from "../constants";
+import { NODE_W, GAP_Y } from "../constants";
 import { FIXED_ASPECT } from "../shapes";
 import { uid } from "../seed";
-import { freeSpot } from "../placement";
+import { freeSpot, childrenOf, layoutChildAmongSiblings } from "../placement";
 import { addEdge, hasEdgeBetween } from "./edges";
 import { computeFitView } from "./view";
 import {
@@ -59,6 +59,11 @@ function merged(state) {
   return nodesWithBounds(state.document.nodes, state.layout.byId);
 }
 
+/** Always spread the full document so `title` is never dropped. */
+function nextDoc(doc, patch) {
+  return { ...doc, ...patch };
+}
+
 /* ------------------------------------------------------------------ */
 /*  reducer                                                            */
 /* ------------------------------------------------------------------ */
@@ -90,7 +95,10 @@ export function boardReducer(state, action) {
         : doc.edges;
       return {
         ...state,
-        document: { nodes: [...doc.nodes, node], edges },
+        document: nextDoc(doc, {
+          nodes: [...doc.nodes, node],
+          edges,
+        }),
         layout: { byId: { ...layout.byId, [node.id]: entry } },
         ui: {
           ...ui,
@@ -160,10 +168,10 @@ export function boardReducer(state, action) {
         : ui.selection;
       return {
         ...state,
-        document: {
+        document: nextDoc(doc, {
           nodes: doc.nodes.filter((n) => n.id !== id),
           edges: doc.edges.filter((e) => e.from !== id && e.to !== id),
-        },
+        }),
         layout: { byId: removeLayoutEntry(layout.byId, id) },
         ui: {
           ...ui,
@@ -179,14 +187,19 @@ export function boardReducer(state, action) {
       const parent = bounds.find((n) => n.id === parentId);
       if (!parent) return state;
       const w = FIXED_ASPECT.has(ui.defShape) ? 128 : NODE_W;
-      const spot = freeSpot(parent.x + parent.w + GAP_X, parent.y, w, 42, bounds);
-      const { node, layout: entry } = buildNode(spot, ui.defShape);
+      const siblings = childrenOf(parent.id, doc.edges, bounds);
+      const { newSpot, shifts } = layoutChildAmongSiblings(parent, siblings, w);
+      const nodes = doc.nodes.map((n) => {
+        const shift = shifts.find((s) => s.id === n.id);
+        return shift ? { ...n, x: shift.x, y: shift.y } : n;
+      });
+      const { node, layout: entry } = buildNode(newSpot, ui.defShape);
       return {
         ...state,
-        document: {
-          nodes: [...doc.nodes, node],
+        document: nextDoc(doc, {
+          nodes: [...nodes, node],
           edges: addEdge(doc.edges, parent.id, node.id, `e${node.id}`),
-        },
+        }),
         layout: { byId: { ...layout.byId, [node.id]: entry } },
         ui: {
           ...ui,
@@ -203,14 +216,35 @@ export function boardReducer(state, action) {
       if (!child) return state;
       const pe = doc.edges.find((e) => e.to === child.id);
       const w = FIXED_ASPECT.has(ui.defShape) ? 128 : NODE_W;
-      const spot = freeSpot(child.x, child.y + child.h + GAP_Y, w, 42, bounds);
-      const { node, layout: entry } = buildNode(spot, ui.defShape);
-      const edges = pe
-        ? addEdge(doc.edges, pe.from, node.id, `e${node.id}`)
-        : doc.edges;
+      if (!pe) {
+        const spot = freeSpot(child.x, child.y + child.h + GAP_Y, w, 42, bounds);
+        const { node, layout: entry } = buildNode(spot, ui.defShape);
+        return {
+          ...state,
+          document: nextDoc(doc, { nodes: [...doc.nodes, node], edges: doc.edges }),
+          layout: { byId: { ...layout.byId, [node.id]: entry } },
+          ui: {
+            ...ui,
+            selection: { kind: "node", id: node.id },
+            editing: { kind: "node", id: node.id },
+          },
+        };
+      }
+      const parent = bounds.find((n) => n.id === pe.from);
+      if (!parent) return state;
+      const siblings = childrenOf(parent.id, doc.edges, bounds);
+      const { newSpot, shifts } = layoutChildAmongSiblings(parent, siblings, w);
+      const nodes = doc.nodes.map((n) => {
+        const shift = shifts.find((s) => s.id === n.id);
+        return shift ? { ...n, x: shift.x, y: shift.y } : n;
+      });
+      const { node, layout: entry } = buildNode(newSpot, ui.defShape);
       return {
         ...state,
-        document: { nodes: [...doc.nodes, node], edges },
+        document: nextDoc(doc, {
+          nodes: [...nodes, node],
+          edges: addEdge(doc.edges, parent.id, node.id, `e${node.id}`),
+        }),
         layout: { byId: { ...layout.byId, [node.id]: entry } },
         ui: {
           ...ui,

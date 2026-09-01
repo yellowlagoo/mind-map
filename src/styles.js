@@ -101,6 +101,7 @@ export const CSS = `
   position:absolute; left:18px; bottom:16px; right:18px;
   display:flex; gap:18px; align-items:center;
   font-size:11px; color: var(--ink-faint);
+  z-index: 30;
 }
 .mm-bar button {
   background:none; border:0; color: var(--ink-faint); font:inherit;

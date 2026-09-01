@@ -22,7 +22,8 @@ import {
 
 export default function MindMap() {
   const [state, dispatch] = useReducer(boardReducer, undefined, createInitialState);
-  const { document: { nodes, edges, title }, layout, ui, view } = state;
+  const { document: board, layout, ui, view } = state;
+  const { nodes, edges, title } = board;
   const boundsNodes = useMemo(
     () => nodesWithBounds(nodes, layout.byId),
     [nodes, layout.byId],
@@ -51,6 +52,7 @@ export default function MindMap() {
   const stateRef = useRef(state);
   stateRef.current = state;
   const fileRef = useRef(null);
+  const pendingKeyRef = useRef(null);
   const centerWorldRef = useRef(() => ({ x: 0, y: 0 }));
 
   const toWorld = useCallback((sx, sy) => {
@@ -104,6 +106,14 @@ export default function MindMap() {
     return () => clearTimeout(t);
   }, [nodes.length, showLanding]);
 
+  useEffect(() => {
+    const id = editing;
+    const key = pendingKeyRef.current;
+    if (!id || !key) return;
+    pendingKeyRef.current = null;
+    dispatch({ type: "NODE_PATCH", id, fields: { text: key } });
+  }, [editing, dispatch]);
+
   /* ---------- keyboard ---------- */
   useEffect(() => {
     const onKey = (e) => {
@@ -152,10 +162,11 @@ export default function MindMap() {
         ) {
           e.preventDefault();
           setShowLanding(false);
+          pendingKeyRef.current = e.key;
           const c = centerWorldRef.current();
           dispatch({
             type: "NODE_ADD",
-            partial: { text: e.key, x: c.x - NODE_W / 2, y: c.y - 20 },
+            partial: { x: c.x - NODE_W / 2, y: c.y - 20 },
           });
           return;
         }
@@ -499,11 +510,11 @@ export default function MindMap() {
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
     });
-    const a = document.createElement("a");
+    const a = globalThis.document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = filenameFromTitle(title);
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 0);
   };
 
   const importJson = (file) => {
