@@ -19,3 +19,6 @@ export const CHILD_GAP_Y = 150;
 
 /** how long the empty-canvas hint stays visible (ms) */
 export const LANDING_MS = 5000;
+
+/** screen pixels reserved at the bottom for the status bar */
+export const BOTTOM_UI_RESERVE = 56;

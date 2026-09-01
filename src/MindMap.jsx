@@ -21,7 +21,7 @@ import {
 /* ------------------------------------------------------------------ */
 
 export default function MindMap() {
-  const [state, dispatch] = useReducer(boardReducer, undefined, createInitialState);
+  const [state, rawDispatch] = useReducer(boardReducer, undefined, createInitialState);
   const { document: board, layout, ui, view } = state;
   const { nodes, edges, title } = board;
   const boundsNodes = useMemo(
@@ -54,6 +54,17 @@ export default function MindMap() {
   const fileRef = useRef(null);
   const pendingKeyRef = useRef(null);
   const centerWorldRef = useRef(() => ({ x: 0, y: 0 }));
+
+  const dispatch = useCallback(
+    (action) => {
+      if (action.type === "ADD_CHILD" || action.type === "ADD_SIBLING") {
+        const r = surfaceRef.current?.getBoundingClientRect();
+        if (r) action = { ...action, viewport: { width: r.width, height: r.height } };
+      }
+      rawDispatch(action);
+    },
+    [rawDispatch],
+  );
 
   const toWorld = useCallback((sx, sy) => {
     const r = surfaceRef.current.getBoundingClientRect();

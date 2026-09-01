@@ -17,3 +17,14 @@ export function computeFitView(nodes, viewportWidth, viewportHeight) {
     y: viewportHeight / 2 - ((y0 + y1) / 2) * k,
   };
 }
+
+/**
+ * Pan the canvas so a new child's bottom sits just above the bottom bar.
+ * Only moves the view when the child would extend past that line.
+ */
+export function panChildIntoView(view, node, viewport, bottomReserve) {
+  const targetBottom = viewport.height - bottomReserve;
+  const nodeBottom = view.y + (node.y + node.h) * view.k;
+  if (nodeBottom <= targetBottom) return view;
+  return { ...view, y: targetBottom - (node.y + node.h) * view.k };
+}

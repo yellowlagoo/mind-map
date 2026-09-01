@@ -1,14 +1,15 @@
-import { NODE_W, GAP_Y } from "../constants";
+import { NODE_W, GAP_Y, BOTTOM_UI_RESERVE } from "../constants";
 import { FIXED_ASPECT } from "../shapes";
 import { uid } from "../seed";
 import { freeSpot, childrenOf, layoutChildAmongSiblings } from "../placement";
 import { addEdge, hasEdgeBetween } from "./edges";
-import { computeFitView } from "./view";
+import { computeFitView, panChildIntoView } from "./view";
 import {
   defaultLayout,
   layoutForShape,
   layoutForText,
   nodesWithBounds,
+  nodeBounds,
 } from "./nodeBounds";
 
 /* ------------------------------------------------------------------ */
@@ -62,6 +63,11 @@ function merged(state) {
 /** Always spread the full document so `title` is never dropped. */
 function nextDoc(doc, patch) {
   return { ...doc, ...patch };
+}
+
+function viewAfterChildAdd(view, node, entry, viewport) {
+  if (!viewport) return view;
+  return panChildIntoView(view, nodeBounds(node, entry), viewport, BOTTOM_UI_RESERVE);
 }
 
 /* ------------------------------------------------------------------ */
@@ -206,6 +212,7 @@ export function boardReducer(state, action) {
           selection: { kind: "node", id: node.id },
           editing: { kind: "node", id: node.id },
         },
+        view: viewAfterChildAdd(view, node, entry, action.viewport),
       };
     }
 
@@ -251,6 +258,7 @@ export function boardReducer(state, action) {
           selection: { kind: "node", id: node.id },
           editing: { kind: "node", id: node.id },
         },
+        view: viewAfterChildAdd(view, node, entry, action.viewport),
       };
     }
 
