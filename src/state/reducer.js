@@ -150,6 +150,14 @@ export function boardReducer(state, action) {
 
     case "NODE_REMOVE": {
       const id = action.id;
+      const incoming = doc.edges.find((e) => e.to === id);
+      const deletingSelected =
+        ui.selection?.kind === "node" && ui.selection.id === id;
+      const selection = deletingSelected
+        ? incoming
+          ? { kind: "node", id: incoming.from }
+          : null
+        : ui.selection;
       return {
         ...state,
         document: {
@@ -159,7 +167,7 @@ export function boardReducer(state, action) {
         layout: { byId: removeLayoutEntry(layout.byId, id) },
         ui: {
           ...ui,
-          selection: ui.selection?.id === id ? null : ui.selection,
+          selection,
           editing: ui.editing?.id === id ? null : ui.editing,
         },
       };
