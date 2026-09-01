@@ -119,5 +119,21 @@ export const CSS = `
 .mm-keys b { color: var(--ink); font-weight:500; font-variant-numeric: tabular-nums; }
 .mm-keys hr { border:0; border-top:1px solid #2a3038; margin:9px 0; }
 
-@media (prefers-reduced-motion: reduce) { .mm-handle { transition:none; } }
+.mm-keys hr { border:0; border-top:1px solid #2a3038; margin:9px 0; }
+
+.mm-landing {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-size: 22px; color: var(--ink-faint);
+  letter-spacing: 0.01em;
+  animation: mm-landing-fade 5s ease forwards;
+}
+@keyframes mm-landing-fade {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) { .mm-handle { transition:none; } .mm-landing { animation: none; } }
 `;

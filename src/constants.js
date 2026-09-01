@@ -13,3 +13,6 @@ export const GAP_X = 90;
 
 /** vertical step used when nudging a new node out of a collision */
 export const GAP_Y = 22;
+
+/** how long the empty-canvas hint stays visible (ms) */
+export const LANDING_MS = 5000;

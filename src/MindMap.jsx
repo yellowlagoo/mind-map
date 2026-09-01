@@ -1,7 +1,7 @@
 import React, { useReducer, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 
 import { CSS } from "./styles";
-import { NODE_W, IMG_W } from "./constants";
+import { NODE_W, IMG_W, LANDING_MS } from "./constants";
 import { SHAPES, FIXED_ASPECT, CENTERED, GLYPH, aspectSize, padFor } from "./shapes";
 import { hostOf, titleFromUrl, edgePath } from "./geometry";
 import { resetIds } from "./seed";
@@ -38,6 +38,7 @@ export default function MindMap() {
   const [cursor, setCursor] = useState(null);
   const [hoverEdge, setHoverEdge] = useState(null);
   const [rewire, setRewire] = useState(null);
+  const [showLanding, setShowLanding] = useState(true);
 
   const surfaceRef = useRef(null);
   const measured = useRef({});
@@ -48,6 +49,7 @@ export default function MindMap() {
   const stateRef = useRef(state);
   stateRef.current = state;
   const fileRef = useRef(null);
+  const centerWorldRef = useRef(() => ({ x: 0, y: 0 }));
 
   const toWorld = useCallback((sx, sy) => {
     const r = surfaceRef.current.getBoundingClientRect();
@@ -59,6 +61,7 @@ export default function MindMap() {
     const r = surfaceRef.current.getBoundingClientRect();
     return toWorld(r.left + r.width / 2, r.top + r.height / 2);
   }, [toWorld]);
+  centerWorldRef.current = centerWorld;
 
   const fit = useCallback(() => {
     const r = surfaceRef.current?.getBoundingClientRect();
@@ -89,6 +92,16 @@ export default function MindMap() {
     if (entries.length) dispatch({ type: "LAYOUT_BATCH", entries });
   });
 
+  useEffect(() => {
+    if (nodes.length > 0) setShowLanding(false);
+  }, [nodes.length]);
+
+  useEffect(() => {
+    if (nodes.length > 0 || !showLanding) return;
+    const t = setTimeout(() => setShowLanding(false), LANDING_MS);
+    return () => clearTimeout(t);
+  }, [nodes.length, showLanding]);
+
   /* ---------- keyboard ---------- */
   useEffect(() => {
     const onKey = (e) => {
@@ -112,6 +125,38 @@ export default function MindMap() {
           setTimeout(() => dispatch({ type: "ADD_CHILD" }), 0);
         }
         return;
+      }
+      if (doc.nodes.length === 0) {
+        const shortcut =
+          e.key === "Tab" ||
+          e.key === "Enter" ||
+          e.key === "Escape" ||
+          e.key === "Backspace" ||
+          e.key === "Delete" ||
+          e.key === "c" ||
+          e.key === "f" ||
+          e.key === "n" ||
+          e.key === "?" ||
+          e.key === "=" ||
+          e.key === "+" ||
+          e.key === "-" ||
+          (e.key >= "1" && e.key <= String(SHAPES.length));
+        if (
+          e.key.length === 1 &&
+          !e.metaKey &&
+          !e.ctrlKey &&
+          !e.altKey &&
+          !shortcut
+        ) {
+          e.preventDefault();
+          setShowLanding(false);
+          const c = centerWorldRef.current();
+          dispatch({
+            type: "NODE_ADD",
+            partial: { text: e.key, x: c.x - NODE_W / 2, y: c.y - 20 },
+          });
+          return;
+        }
       }
       if (e.key === "Tab") {
         e.preventDefault();
@@ -534,6 +579,7 @@ export default function MindMap() {
         onDoubleClick={(e) => {
           if (e.target.closest(".mm-node") || e.target.closest(".mm-edgelabel")) return;
           if (e.target.tagName === "path" || e.target.tagName === "circle") return;
+          setShowLanding(false);
           const p = toWorld(e.clientX, e.clientY);
           dispatch({
             type: "NODE_ADD",
@@ -792,6 +838,10 @@ export default function MindMap() {
           })}
         </div>
       </div>
+
+      {showLanding && nodes.length === 0 && (
+        <p className="mm-landing">Type anywhere to start</p>
+      )}
 
       {selNode && !editing && !dragging && !wire && !linkFrom && (
         <div
