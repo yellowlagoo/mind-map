@@ -1,4 +1,4 @@
-import React, { useReducer, useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import React, { useReducer, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 
 import { CSS } from "./styles";
 import { NODE_W, IMG_W } from "./constants";
@@ -6,6 +6,7 @@ import { SHAPES, FIXED_ASPECT, CENTERED, GLYPH, aspectSize, padFor } from "./sha
 import { hostOf, titleFromUrl, edgePath } from "./geometry";
 import { resetIds } from "./seed";
 import { createInitialState } from "./state/initialState";
+import { nodesWithBounds, mergeForExport } from "./state/nodeBounds";
 import {
   boardReducer,
   selectedNodeId,
@@ -20,7 +21,11 @@ import {
 
 export default function MindMap() {
   const [state, dispatch] = useReducer(boardReducer, undefined, createInitialState);
-  const { document: { nodes, edges }, ui, view } = state;
+  const { document: { nodes, edges }, layout, ui, view } = state;
+  const boundsNodes = useMemo(
+    () => nodesWithBounds(nodes, layout.byId),
+    [nodes, layout.byId],
+  );
   const { defShape, showKeys, linkFrom } = ui;
   const sel = selectedNodeId(ui);
   const selEdge = selectedEdgeId(ui);
@@ -38,8 +43,8 @@ export default function MindMap() {
   const measured = useRef({});
   const viewRef = useRef(view);
   viewRef.current = view;
-  const nodesRef = useRef(nodes);
-  nodesRef.current = nodes;
+  const nodesRef = useRef(boundsNodes);
+  nodesRef.current = boundsNodes;
   const stateRef = useRef(state);
   stateRef.current = state;
   const fileRef = useRef(null);
@@ -62,26 +67,26 @@ export default function MindMap() {
   }, []);
 
   useLayoutEffect(() => {
-    let changed = false;
-    const next = nodes.map((n) => {
+    const { document: doc, layout: lay } = stateRef.current;
+    const entries = [];
+    for (const n of doc.nodes) {
+      const cur = lay.byId[n.id];
       if (FIXED_ASPECT.has(n.shape)) {
         const s = aspectSize(n);
-        if (Math.abs(s - n.w) > 0.5 || Math.abs(s - n.h) > 0.5) {
-          changed = true;
-          return { ...n, w: s, h: s };
+        if (!cur || Math.abs(s - cur.w) > 0.5 || Math.abs(s - cur.h) > 0.5) {
+          entries.push({ id: n.id, w: s, h: s });
         }
-        return n;
+        continue;
       }
       const el = measured.current[n.id];
-      if (!el) return n;
+      if (!el) continue;
       const h = el.offsetHeight;
-      if (h && Math.abs(h - n.h) > 0.5) {
-        changed = true;
-        return { ...n, h };
+      const w = cur?.w ?? NODE_W;
+      if (h && (!cur || Math.abs(h - cur.h) > 0.5)) {
+        entries.push({ id: n.id, w, h });
       }
-      return n;
-    });
-    if (changed) dispatch({ type: "NODES_SYNC_DIMENSIONS", nodes: next });
+    }
+    if (entries.length) dispatch({ type: "LAYOUT_BATCH", entries });
   });
 
   /* ---------- keyboard ---------- */
@@ -150,7 +155,7 @@ export default function MindMap() {
         dispatch({ type: "EDGE_APPEND_LABEL", id: selEdge, char: e.key });
         return;
       }
-      if (e.key >= "1" && e.key <= "6") {
+      if (e.key >= "1" && e.key <= String(SHAPES.length)) {
         const shape = SHAPES[Number(e.key) - 1];
         if (sel) {
           dispatch({ type: "NODE_SET_SHAPE", id: sel, shape });
@@ -439,9 +444,10 @@ export default function MindMap() {
 
   /* ---------- files ---------- */
   const exportJson = () => {
-    const blob = new Blob([JSON.stringify({ nodes, edges }, null, 2)], {
-      type: "application/json",
-    });
+    const blob = new Blob(
+      [JSON.stringify({ nodes: mergeForExport(nodes, layout.byId), edges }, null, 2)],
+      { type: "application/json" },
+    );
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "map.json";
@@ -466,7 +472,7 @@ export default function MindMap() {
   };
 
   /* ---------- render ---------- */
-  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const byId = Object.fromEntries(boundsNodes.map((n) => [n.id, n]));
   const wireFrom = wire ? byId[wire.from] : null;
   const dot = 26 * view.k;
   const selNode = sel ? byId[sel] : null;
@@ -696,7 +702,7 @@ export default function MindMap() {
             );
           })}
 
-          {nodes.map((n) => {
+          {boundsNodes.map((n) => {
             const isSel = sel === n.id || linkFrom === n.id;
             const isEdit = editing === n.id;
             const pad = padFor(n.shape, n.w);
@@ -843,7 +849,7 @@ export default function MindMap() {
           <hr />
           <div>
             <span>Shape</span>
-            <b>1 – 6</b>
+            <b>1 – 3</b>
           </div>
           <div>
             <span>Connect</span>

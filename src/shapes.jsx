@@ -4,23 +4,18 @@ import React from "react";
 /*  shapes                                                             */
 /* ------------------------------------------------------------------ */
 
-/* order matters: the 1-6 keyboard shortcuts index into this array */
-export const SHAPES = ["plain", "rect", "round", "square", "circle", "diamond"];
+/* order matters: the 1–3 keyboard shortcuts index into this array */
+export const SHAPES = ["plain", "rect", "round"];
 
-/* shapes that must stay square, so they size themselves instead of
-   being measured from the DOM */
+/* legacy shapes from older saves — not selectable, still rendered on import */
 export const FIXED_ASPECT = new Set(["square", "circle", "diamond"]);
 
-/* shapes whose text is centred rather than flush left */
 export const CENTERED = new Set(["square", "circle", "diamond"]);
 
 export const GLYPH = {
-  plain:   <path d="M3 6h12M3 10h9M3 14h11" />,
-  rect:    <rect x="2.5" y="4.5" width="13" height="9" />,
-  round:   <rect x="2.5" y="4.5" width="13" height="9" rx="3" />,
-  square:  <rect x="3.5" y="3.5" width="11" height="11" />,
-  circle:  <circle cx="9" cy="9" r="6" />,
-  diamond: <path d="M9 2.5 15.5 9 9 15.5 2.5 9Z" />,
+  plain: <path d="M3 6h12M3 10h9M3 14h11" />,
+  rect:  <rect x="2.5" y="4.5" width="13" height="9" />,
+  round: <rect x="2.5" y="4.5" width="13" height="9" rx="3" />,
 };
 
 /* how big a fixed-aspect node needs to be to hold its text */

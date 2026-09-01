@@ -1,11 +1,17 @@
 import { seed } from "../seed";
+import { splitNode } from "./nodeBounds";
 
 export function createInitialState(seedData = seed()) {
+  const byId = {};
+  const nodes = seedData.nodes.map((raw) => {
+    const { node, layout } = splitNode(raw);
+    byId[node.id] = layout;
+    return node;
+  });
+
   return {
-    document: {
-      nodes: seedData.nodes,
-      edges: seedData.edges,
-    },
+    document: { nodes, edges: seedData.edges },
+    layout: { byId },
     ui: {
       selection: null,
       editing: null,

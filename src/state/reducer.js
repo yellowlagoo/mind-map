@@ -1,12 +1,18 @@
-import { NODE_W, IMG_W, GAP_X, GAP_Y } from "../constants";
-import { FIXED_ASPECT, aspectSize } from "../shapes";
+import { NODE_W, GAP_X, GAP_Y } from "../constants";
+import { FIXED_ASPECT } from "../shapes";
 import { uid } from "../seed";
 import { freeSpot } from "../placement";
 import { addEdge, hasEdgeBetween } from "./edges";
 import { computeFitView } from "./view";
+import {
+  defaultLayout,
+  layoutForShape,
+  layoutForText,
+  nodesWithBounds,
+} from "./nodeBounds";
 
 /* ------------------------------------------------------------------ */
-/*  selectors (read ui.selection without repeating kind checks)        */
+/*  selectors                                                          */
 /* ------------------------------------------------------------------ */
 
 export function selectedNodeId(ui) {
@@ -31,32 +37,26 @@ export function editingEdgeId(ui) {
 
 function buildNode(partial, defShape) {
   const shape = partial.shape || defShape;
-  const base = {
+  const { w, h, ...rest } = partial;
+  const node = {
     id: uid(),
     type: "text",
     text: "",
-    w: NODE_W,
-    h: 42,
-    ...partial,
+    ...rest,
     shape,
   };
-  if (FIXED_ASPECT.has(shape)) {
-    const s = aspectSize(base);
-    base.w = s;
-    base.h = s;
-  }
-  return base;
+  const layout =
+    w != null && h != null ? { w, h } : defaultLayout(node);
+  return { node, layout };
 }
 
-function setNodeShape(nodes, id, shape) {
-  return nodes.map((n) => {
-    if (n.id !== id) return n;
-    if (FIXED_ASPECT.has(shape)) {
-      const s = aspectSize({ ...n, shape });
-      return { ...n, shape, w: s, h: s };
-    }
-    return { ...n, shape, w: n.type === "image" ? IMG_W : NODE_W };
-  });
+function removeLayoutEntry(byId, id) {
+  const { [id]: _, ...rest } = byId;
+  return rest;
+}
+
+function merged(state) {
+  return nodesWithBounds(state.document.nodes, state.layout.byId);
 }
 
 /* ------------------------------------------------------------------ */
@@ -64,12 +64,26 @@ function setNodeShape(nodes, id, shape) {
 /* ------------------------------------------------------------------ */
 
 export function boardReducer(state, action) {
-  const { document: doc, ui, view } = state;
+  const { document: doc, layout, ui, view } = state;
 
   switch (action.type) {
+    /* ---- layout (not undoable) ---- */
+    case "LAYOUT_BATCH": {
+      const next = { ...layout.byId };
+      let changed = false;
+      for (const { id, w, h } of action.entries) {
+        const prev = layout.byId[id];
+        if (prev && Math.abs(prev.w - w) <= 0.5 && Math.abs(prev.h - h) <= 0.5) continue;
+        next[id] = { w, h };
+        changed = true;
+      }
+      if (!changed) return state;
+      return { ...state, layout: { byId: next } };
+    }
+
     /* ---- document: nodes ---- */
     case "NODE_ADD": {
-      const node = buildNode(action.partial, ui.defShape);
+      const { node, layout: entry } = buildNode(action.partial, ui.defShape);
       const connectFrom = action.connectFrom ?? null;
       const edges = connectFrom
         ? addEdge(doc.edges, connectFrom, node.id, `e${node.id}`)
@@ -77,6 +91,7 @@ export function boardReducer(state, action) {
       return {
         ...state,
         document: { nodes: [...doc.nodes, node], edges },
+        layout: { byId: { ...layout.byId, [node.id]: entry } },
         ui: {
           ...ui,
           selection: { kind: "node", id: node.id },
@@ -96,25 +111,42 @@ export function boardReducer(state, action) {
         },
       };
 
-    case "NODE_PATCH":
+    case "NODE_PATCH": {
+      const node = doc.nodes.find((n) => n.id === action.id);
+      if (!node) return state;
+      const next = { ...node, ...action.fields };
+      let byId = layout.byId;
+      if (FIXED_ASPECT.has(next.shape) && "text" in action.fields) {
+        byId = { ...byId, [action.id]: layoutForText(next, action.fields.text) };
+      }
       return {
         ...state,
         document: {
           ...doc,
-          nodes: doc.nodes.map((n) =>
-            n.id === action.id ? { ...n, ...action.fields } : n,
-          ),
+          nodes: doc.nodes.map((n) => (n.id === action.id ? next : n)),
         },
+        layout: { byId },
       };
+    }
 
-    case "NODE_SET_SHAPE":
+    case "NODE_SET_SHAPE": {
+      const node = doc.nodes.find((n) => n.id === action.id);
+      if (!node) return state;
+      const next = { ...node, shape: action.shape };
       return {
         ...state,
         document: {
           ...doc,
-          nodes: setNodeShape(doc.nodes, action.id, action.shape),
+          nodes: doc.nodes.map((n) => (n.id === action.id ? next : n)),
+        },
+        layout: {
+          byId: {
+            ...layout.byId,
+            [action.id]: layoutForShape(node, action.shape, layout.byId[action.id]),
+          },
         },
       };
+    }
 
     case "NODE_REMOVE": {
       const id = action.id;
@@ -124,34 +156,30 @@ export function boardReducer(state, action) {
           nodes: doc.nodes.filter((n) => n.id !== id),
           edges: doc.edges.filter((e) => e.from !== id && e.to !== id),
         },
+        layout: { byId: removeLayoutEntry(layout.byId, id) },
         ui: {
           ...ui,
-          selection:
-            ui.selection?.id === id ? null : ui.selection,
+          selection: ui.selection?.id === id ? null : ui.selection,
           editing: ui.editing?.id === id ? null : ui.editing,
         },
       };
     }
 
-    case "NODES_SYNC_DIMENSIONS":
-      return {
-        ...state,
-        document: { ...doc, nodes: action.nodes },
-      };
-
     case "ADD_CHILD": {
       const parentId = selectedNodeId(ui);
-      const parent = doc.nodes.find((n) => n.id === parentId);
+      const bounds = merged(state);
+      const parent = bounds.find((n) => n.id === parentId);
       if (!parent) return state;
       const w = FIXED_ASPECT.has(ui.defShape) ? 128 : NODE_W;
-      const spot = freeSpot(parent.x + parent.w + GAP_X, parent.y, w, 42, doc.nodes);
-      const node = buildNode(spot, ui.defShape);
+      const spot = freeSpot(parent.x + parent.w + GAP_X, parent.y, w, 42, bounds);
+      const { node, layout: entry } = buildNode(spot, ui.defShape);
       return {
         ...state,
         document: {
           nodes: [...doc.nodes, node],
           edges: addEdge(doc.edges, parent.id, node.id, `e${node.id}`),
         },
+        layout: { byId: { ...layout.byId, [node.id]: entry } },
         ui: {
           ...ui,
           selection: { kind: "node", id: node.id },
@@ -162,18 +190,20 @@ export function boardReducer(state, action) {
 
     case "ADD_SIBLING": {
       const childId = selectedNodeId(ui);
-      const child = doc.nodes.find((n) => n.id === childId);
+      const bounds = merged(state);
+      const child = bounds.find((n) => n.id === childId);
       if (!child) return state;
       const pe = doc.edges.find((e) => e.to === child.id);
       const w = FIXED_ASPECT.has(ui.defShape) ? 128 : NODE_W;
-      const spot = freeSpot(child.x, child.y + child.h + GAP_Y, w, 42, doc.nodes);
-      const node = buildNode(spot, ui.defShape);
+      const spot = freeSpot(child.x, child.y + child.h + GAP_Y, w, 42, bounds);
+      const { node, layout: entry } = buildNode(spot, ui.defShape);
       const edges = pe
         ? addEdge(doc.edges, pe.from, node.id, `e${node.id}`)
         : doc.edges;
       return {
         ...state,
         document: { nodes: [...doc.nodes, node], edges },
+        layout: { byId: { ...layout.byId, [node.id]: entry } },
         ui: {
           ...ui,
           selection: { kind: "node", id: node.id },
@@ -247,15 +277,22 @@ export function boardReducer(state, action) {
       };
     }
 
-    case "DOCUMENT_LOAD":
+    case "DOCUMENT_LOAD": {
+      const byId = {};
+      const nodes = action.nodes.map((raw) => {
+        const { w, h, ...rest } = { shape: "plain", ...raw };
+        const node = rest;
+        byId[node.id] =
+          w != null && h != null ? { w, h } : defaultLayout(node);
+        return node;
+      });
       return {
         ...state,
-        document: {
-          nodes: action.nodes.map((n) => ({ shape: "plain", ...n })),
-          edges: action.edges || [],
-        },
+        document: { nodes, edges: action.edges || [] },
+        layout: { byId },
         ui: { ...ui, selection: null, editing: null, linkFrom: null },
       };
+    }
 
     /* ---- ui ---- */
     case "SELECT":
@@ -320,11 +357,10 @@ export function boardReducer(state, action) {
       return { ...state, view: action.view };
 
     case "VIEW_ZOOM_KEY": {
-      const factor = action.direction === "in" ? 1.15 : 1 / 1.15;
       const k =
         action.direction === "in"
-          ? Math.min(2.5, view.k * factor)
-          : Math.max(0.2, view.k * factor);
+          ? Math.min(2.5, view.k * 1.15)
+          : Math.max(0.2, view.k / 1.15);
       return { ...state, view: { ...view, k } };
     }
 
@@ -345,7 +381,7 @@ export function boardReducer(state, action) {
     }
 
     case "VIEW_FIT": {
-      const next = computeFitView(doc.nodes, action.width, action.height);
+      const next = computeFitView(merged(state), action.width, action.height);
       if (!next) return state;
       return { ...state, view: next };
     }

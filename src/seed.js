@@ -17,7 +17,7 @@ export const resetIds = (n) => { _id = n; };
 /* ------------------------------------------------------------------ */
 
 export function seed() {
-  const a = { id: uid(), type: "text", shape: "circle", text: "Reading room", x: 0, y: 0, w: 160, h: 160 };
+  const a = { id: uid(), type: "text", shape: "round", text: "Reading room", x: 0, y: 0, w: NODE_W, h: 42 };
   const b = { id: uid(), type: "text", shape: "plain", text: "Spatial memory beats search", x: 330, y: -90, w: NODE_W, h: 42 };
   const c = { id: uid(), type: "text", shape: "plain", text: "Auto-layout destroys it", x: 330, y: 10, w: NODE_W, h: 42 };
   const d = { id: uid(), type: "link", shape: "rect", text: "Notational velocity", url: "https://notational.net", x: 330, y: 110, w: NODE_W, h: 62 };
