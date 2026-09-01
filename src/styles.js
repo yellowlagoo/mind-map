@@ -109,6 +109,22 @@ export const CSS = `
 .mm-bar button:hover { color: var(--ink-dim); }
 .mm-bar .sp { flex:1; }
 
+.mm-boardtitle {
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-size: 13px; color: var(--ink-faint);
+}
+.mm-boardtitle-btn {
+  background: none; border: 0; padding: 0;
+  font: inherit; color: inherit; cursor: text;
+}
+.mm-boardtitle:hover .mm-boardtitle-btn,
+.mm-boardtitle-btn:hover { color: var(--ink); }
+.mm-boardtitle-input {
+  background: none; border: 0; border-bottom: 1px solid var(--line);
+  font: inherit; color: var(--ink); outline: none;
+  padding: 0 0 1px; min-width: 8ch; width: 16ch;
+}
+
 .mm-keys {
   position:absolute; right:18px; top:16px;
   background:#171b22; border:1px solid #2a3038;

@@ -7,6 +7,7 @@ import { hostOf, titleFromUrl, edgePath } from "./geometry";
 import { resetIds } from "./seed";
 import { createInitialState } from "./state/initialState";
 import { nodesWithBounds, mergeForExport } from "./state/nodeBounds";
+import { filenameFromTitle } from "./state/filename";
 import {
   boardReducer,
   selectedNodeId,
@@ -21,7 +22,7 @@ import {
 
 export default function MindMap() {
   const [state, dispatch] = useReducer(boardReducer, undefined, createInitialState);
-  const { document: { nodes, edges }, layout, ui, view } = state;
+  const { document: { nodes, edges, title }, layout, ui, view } = state;
   const boundsNodes = useMemo(
     () => nodesWithBounds(nodes, layout.byId),
     [nodes, layout.byId],
@@ -39,6 +40,7 @@ export default function MindMap() {
   const [hoverEdge, setHoverEdge] = useState(null);
   const [rewire, setRewire] = useState(null);
   const [showLanding, setShowLanding] = useState(true);
+  const [editingTitle, setEditingTitle] = useState(false);
 
   const surfaceRef = useRef(null);
   const measured = useRef({});
@@ -489,13 +491,17 @@ export default function MindMap() {
 
   /* ---------- files ---------- */
   const exportJson = () => {
-    const blob = new Blob(
-      [JSON.stringify({ nodes: mergeForExport(nodes, layout.byId), edges }, null, 2)],
-      { type: "application/json" },
-    );
+    const payload = {
+      title,
+      nodes: mergeForExport(nodes, layout.byId),
+      edges,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "map.json";
+    a.download = filenameFromTitle(title);
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -506,7 +512,12 @@ export default function MindMap() {
       try {
         const data = JSON.parse(rd.result);
         if (!Array.isArray(data.nodes)) return;
-        dispatch({ type: "DOCUMENT_LOAD", nodes: data.nodes, edges: data.edges });
+        dispatch({
+          type: "DOCUMENT_LOAD",
+          nodes: data.nodes,
+          edges: data.edges,
+          title: data.title,
+        });
         resetIds(data.nodes.length + 1000);
         setTimeout(fit, 40);
       } catch {
@@ -934,6 +945,39 @@ export default function MindMap() {
       )}
 
       <div className="mm-bar">
+        <div className="mm-boardtitle">
+          {editingTitle ? (
+            <input
+              className="mm-boardtitle-input"
+              autoFocus
+              defaultValue={title}
+              onBlur={(e) => {
+                dispatch({ type: "SET_TITLE", title: e.target.value });
+                setEditingTitle(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  dispatch({ type: "SET_TITLE", title: e.currentTarget.value });
+                  setEditingTitle(false);
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setEditingTitle(false);
+                }
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="mm-boardtitle-btn"
+              title="Rename board"
+              onClick={() => setEditingTitle(true)}
+            >
+              {title}
+            </button>
+          )}
+        </div>
         <span>
           {linkFrom
             ? "Click a node to connect it. Esc to stop."

@@ -10,7 +10,7 @@ export function createInitialState(seedData = seed()) {
   });
 
   return {
-    document: { nodes, edges: seedData.edges },
+    document: { nodes, edges: seedData.edges, title: "Untitled" },
     layout: { byId },
     ui: {
       selection: null,

@@ -296,11 +296,24 @@ export function boardReducer(state, action) {
       });
       return {
         ...state,
-        document: { nodes, edges: action.edges || [] },
+        document: {
+          nodes,
+          edges: action.edges || [],
+          title: action.title?.trim() || "Untitled",
+        },
         layout: { byId },
         ui: { ...ui, selection: null, editing: null, linkFrom: null },
       };
     }
+
+    case "SET_TITLE":
+      return {
+        ...state,
+        document: {
+          ...doc,
+          title: action.title.trim() || "Untitled",
+        },
+      };
 
     /* ---- ui ---- */
     case "SELECT":
